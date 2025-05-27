@@ -9,7 +9,7 @@
 
 (define-data-var vault-paused bool false)
 (define-data-var total-deposits uint u0)
-(define-data-var yield-rate uint u500) ;; 5% annual yield (500 basis points)
+(define-data-var yield-rate uint u500)
 (define-data-var current-cycle uint u0)
 
 (define-map user-deposits principal uint)
@@ -33,18 +33,18 @@
 
 (define-read-only (calculate-yield (user principal))
   (let (
-    (deposit (get-user-deposit user))
+    (user-deposit (get-user-deposit user))
     (last-claim (default-to (var-get current-cycle) (map-get? user-last-claim user)))
     (cycles-elapsed (- (var-get current-cycle) last-claim))
   )
-    (if (> deposit u0)
-      (/ (* deposit yield-rate cycles-elapsed) u1000000)
+    (if (> user-deposit u0)
+      (/ (* user-deposit (var-get yield-rate) cycles-elapsed) u1000000)
       u0
     )
   )
 )
 
-(define-public (deposit (amount uint))
+(define-public (deposit-funds (amount uint))
   (begin
     (asserts! (not (var-get vault-paused)) ERR_VAULT_PAUSED)
     (asserts! (> amount u0) ERR_INVALID_AMOUNT)
@@ -63,7 +63,7 @@
   )
 )
 
-(define-public (withdraw (amount uint))
+(define-public (withdraw-funds (amount uint))
   (let (
     (user-deposit (get-user-deposit tx-sender))
   )
@@ -107,6 +107,7 @@
 (define-public (set-yield-rate (new-rate uint))
   (begin
     (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (asserts! (<= new-rate u10000) ERR_INVALID_AMOUNT)
     (var-set yield-rate new-rate)
     (ok true)
   )
