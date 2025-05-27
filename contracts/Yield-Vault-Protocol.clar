@@ -10,6 +10,7 @@
 (define-data-var vault-paused bool false)
 (define-data-var total-deposits uint u0)
 (define-data-var yield-rate uint u500) ;; 5% annual yield (500 basis points)
+(define-data-var current-cycle uint u0)
 
 (define-map user-deposits principal uint)
 (define-map user-last-claim principal uint)
@@ -26,14 +27,18 @@
   (var-get yield-rate)
 )
 
+(define-read-only (get-current-cycle)
+  (var-get current-cycle)
+)
+
 (define-read-only (calculate-yield (user principal))
   (let (
     (deposit (get-user-deposit user))
-    (last-claim (default-to block-height (map-get? user-last-claim user)))
-    (blocks-elapsed (- block-height last-claim))
+    (last-claim (default-to (var-get current-cycle) (map-get? user-last-claim user)))
+    (cycles-elapsed (- (var-get current-cycle) last-claim))
   )
     (if (> deposit u0)
-      (/ (* deposit yield-rate blocks-elapsed) u1000000)
+      (/ (* deposit yield-rate cycles-elapsed) u1000000)
       u0
     )
   )
@@ -51,7 +56,7 @@
       (new-deposit (+ current-deposit amount))
     )
       (map-set user-deposits tx-sender new-deposit)
-      (map-set user-last-claim tx-sender block-height)
+      (map-set user-last-claim tx-sender (var-get current-cycle))
       (var-set total-deposits (+ (var-get total-deposits) amount))
       (ok new-deposit)
     )
@@ -87,8 +92,15 @@
     (asserts! (> yield-amount u0) ERR_INVALID_AMOUNT)
     
     (try! (as-contract (stx-transfer? yield-amount tx-sender tx-sender)))
-    (map-set user-last-claim tx-sender block-height)
+    (map-set user-last-claim tx-sender (var-get current-cycle))
     (ok yield-amount)
+  )
+)
+
+(define-public (advance-cycle)
+  (begin
+    (var-set current-cycle (+ (var-get current-cycle) u1))
+    (ok (var-get current-cycle))
   )
 )
 
